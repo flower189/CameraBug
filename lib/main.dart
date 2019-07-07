@@ -1,6 +1,8 @@
 import 'dart:io';
 
+import 'package:exif/exif.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:image_picker/image_picker.dart';
 
 void main() => runApp(MyApp());
@@ -32,7 +34,8 @@ class _MyHomePageState extends State<MyHomePage> {
   void _getImage(BuildContext context, ImageSource source) {
     ImagePicker.pickImage(
       source: source,
-    ).then((File image) {
+    ).then((File image) async {
+      image = await rotateAndCompressAndSaveImage(image);
       setState(() {
         _imageFile = image;
       });
@@ -114,4 +117,37 @@ class _MyHomePageState extends State<MyHomePage> {
       ),
     );
   }
+
+  Future<File> rotateAndCompressAndSaveImage(File image) async {
+    int rotate = 0;
+    List<int> imageBytes = await image.readAsBytes();
+    Map<String, IfdTag> exifData = await readExifFromBytes(imageBytes);
+
+    if (exifData != null &&
+        exifData.isNotEmpty &&
+        exifData.containsKey("Image Orientation")) {
+      IfdTag orientation = exifData["Image Orientation"];
+      int orientationValue = orientation.values[0];
+
+      if (orientationValue == 3) {
+        rotate = 180;
+      }
+
+      if (orientationValue == 6) {
+        rotate = -90;
+      }
+
+      if (orientationValue == 8) {
+        rotate = 90;
+      }
+    }
+
+    List<int> result = await FlutterImageCompress.compressWithList(imageBytes,
+        quality: 100, rotate: rotate);
+
+    await image.writeAsBytes(result);
+
+    return image;
+  }
+
 }
